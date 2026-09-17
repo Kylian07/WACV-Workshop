@@ -63,9 +63,10 @@ simplex of visual atoms, with the relational structure of the question entering 
 column-stochastic transport operator.
 (C2) Lemma 1: dimension-free relative smoothness `L = 4β`, hence a *prescribed* step size
 and an `O(4β log N / T)` rate that does not degrade as the atom grid is refined.
-(C3) Theorem A: a sound, `O(N)`-cost halting certificate; and Prop. 3, which predicts that
-halting time scales as `1/Δ` in the decision margin — i.e. that harder questions get more
-compute, for free.
+(C3) Theorem A: a sound, `O(N)`-cost halting certificate for the inner loop, paired with a
+belief-stationarity rule for the outer loop; and Prop. 3, which predicts that halting time
+scales as `1/Δ` in the decision margin — i.e. that harder questions get more compute, for
+free.
 (C4) Empirically: an accuracy/compute frontier traced by one trained model, halting steps
 that track ground-truth program depth without supervision, zero measured drift, and
 improved depth extrapolation.
@@ -119,13 +120,24 @@ relational term is what turns a re-weighting of evidence into a hop.
 
 ### 3.3 Halting
 
-Two certificates, no learned gate:
+Two rules, each governing its own loop, and neither a learned gate:
 
-* **inner** — `G_k ≤ ε·G_0`: this hop is solved to relative accuracy ε (Thm. A);
-* **outer** — `KL(p_h‖p_{h−1}) ≤ δ`: the hop did not move the belief, so there is no further
-  sub-question.
+* **inner** — `G_k ≤ ε·G_0`: by Thm. A this hop's energy is solved to relative accuracy ε,
+  so stop iterating *within* the hop. This is what the reported compute cost counts.
+* **outer** — `KL(p_h‖p_{h−1}) ≤ δ·KL(p_1‖p_0)`: the hop moved no belief, so there is no
+  further sub-question. This decides *how many hops* to take, and therefore the answer.
 
-Sweeping ε on a *single trained model* traces an accuracy/compute curve (Fig. 4).
+Keeping them apart is not a detail. The gap certifies that the *current sub-question* is
+answered, which is not the same as the question being answered: a 3-hop question can have
+hop 1 solved to machine precision while the answer is still two hops away. Using the gap to
+decide the number of hops conflates the two and stops early on exactly the hard questions
+adaptivity was supposed to help — we measured a ~16-point accuracy loss at the operating
+point before separating them.
+
+Both thresholds are relative to the first value in their own sequence, which makes a single
+global threshold meaningful across examples whose score scales differ. Sweeping δ on a
+*single trained model* traces the accuracy/compute curve of Fig. 4; every fixed-depth
+baseline can only contribute a point.
 
 ### 3.4 Read-out
 

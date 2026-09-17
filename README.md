@@ -34,7 +34,7 @@ Then:
 | | |
 |---|---|
 | **on-manifold** | `z = Vᵀp ∈ conv(V)` at every step — drift is zero by construction, not by penalty |
-| **knows when to stop** | the Frank–Wolfe gap `G = ⟨∇E,p⟩ − min_i ∇E_i` upper-bounds true suboptimality: a *sound* certificate, `O(N)`, no learned gate |
+| **knows when to stop** | the Frank–Wolfe gap `G = ⟨∇E,p⟩ − min_i ∇E_i` upper-bounds true suboptimality: a *sound* certificate, `O(N)`, no learned gate. It governs iterations *within* a hop; a separate belief-stationarity rule `KL(p_h‖p_{h−1}) ≤ δ` governs how many hops — conflating the two stops early on exactly the hard questions |
 | **readable** | `p_t` is a distribution over image regions — the trace **is** the computation |
 | **no step-size tuning** | `E` is `4β`-smooth relative to the entropy *independently of N*, so `η = 1/(4β)` is prescribed |
 | **backward compatible** | softmax cross-attention is exactly one step (`T=1, β=0, η=1`) |

@@ -195,10 +195,20 @@ class TrailReasoner(nn.Module):
         the prescribed 1/(4 beta), the energy is non-increasing, and the
         Frank-Wolfe gap is a sound bound on how far this hop is from solved.
 
-        Two halting rules, both certificates rather than learned gates:
-          inner   G_k <= eps_rel * G_0   -- this hop is solved to eps_rel
-          outer   KL(p_h || p_{h-1}) <= delta -- the hop changed nothing, so
-                  there is no further sub-question to answer.
+        Two halting rules, each governing its own loop, and neither a learned gate:
+
+          inner   G_k <= eps * G_0        this hop's energy is solved (Thm. A),
+                                          so stop iterating *within* the hop;
+          outer   KL(p_h||p_{h-1}) <= delta * KL(p_1||p_0)
+                                          the hop moved no belief, so there is no
+                                          further sub-question -- stop hopping.
+
+        Keeping these apart matters.  The gap certifies that *this* sub-question
+        is answered, which is not the same as the question being answered: a
+        3-hop question can have hop 1 solved to machine precision while the
+        answer is still two hops away.  Using the gap to decide how many hops to
+        take conflates the two and stops early on exactly the hard questions the
+        adaptivity was supposed to help.
 
         Cost note: the expensive object is M_h, built once per *hop*, not once
         per mirror-descent step.  H=4, K=4 costs 4 transport builds and 16 belief
@@ -215,7 +225,7 @@ class TrailReasoner(nn.Module):
         st = TrailState()
         done = torch.zeros(B, dtype=torch.bool, device=V.device)
         halt = torch.full((B,), float(H), device=V.device)
-        gap0 = None
+        gap0 = move0 = None
 
         for h in range(H):
             z = torch.einsum("bn,bnd->bd", p, V)
@@ -237,6 +247,8 @@ class TrailReasoner(nn.Module):
             g_end = cert.energy_grad(p, s, M, beta)
             gap_end = cert.frank_wolfe_gap(p, g_end)
             move = cert.kl(p, p_hop_start)          # how much this hop moved belief
+            if move0 is None:
+                move0 = move.detach().clamp_min(1e-8)
 
             z = torch.einsum("bn,bnd->bd", p, V)
             if gap0 is None:
@@ -245,16 +257,16 @@ class TrailReasoner(nn.Module):
             if record:
                 st.p.append(p)
                 st.gap.append(gap_end if self.gap_mode == "absolute" else gap_end / gap0)
-                st.move.append(move)
+                st.move.append(move if self.gap_mode == "absolute" else move / move0)
                 st.energy.append(cert.energy(p, s, M, beta))
                 if answer_head is not None:
                     st.logits.append(answer_head(z, c, q_vec, p, s))
 
-            if eps is not None:
-                crit = gap_end if self.gap_mode == "absolute" else gap_end / gap0
-                newly = (~done) & ((crit <= eps) | (move <= self.delta))
-                halt = torch.where(newly, torch.full_like(halt, float(h)), halt)
-                done = done | newly
+            # The outer rule alone decides how many hops to take.
+            mv = move if self.gap_mode == "absolute" else move / move0
+            newly = (~done) & (mv <= self.delta)
+            halt = torch.where(newly, torch.full_like(halt, float(h)), halt)
+            done = done | newly
 
         st.halt_step = halt
         return st

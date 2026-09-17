@@ -101,11 +101,19 @@ def fig_drift(results: dict, out: Path):
 def fig_gap_curve(results: dict, out: Path):
     """Fig. 2: the certified suboptimality bound falling, averaged over the test set."""
     fig, ax = plt.subplots(figsize=(4.6, 3.4))
-    g = results.get("trail", {}).get("gap_curve")
-    if g:
+    tr = results.get("trail", {})
+    inner = tr.get("inner_gap_curve")
+    g = tr.get("gap_curve")
+    if inner:
+        ax.semilogy(range(1, len(inner) + 1), np.maximum(inner, 1e-8),
+                    "-o", ms=3, color=C["trail"], label="every mirror-descent iteration")
+        K = tr.get("updates_per_step", 1)
+        for h in range(K, len(inner), K):        # hop boundaries: the energy changes here
+            ax.axvline(h + 0.5, color="0.7", lw=0.8, ls=":")
+    elif g:
         ax.semilogy(range(1, len(g) + 1), np.maximum(g, 1e-8), "-o", ms=4, color=C["trail"])
-    _style(ax, "reasoning step $t$", r"mean Frank-Wolfe gap $G_t$",
-           r"Certified bound on $E(p_t)-E^\star$")
+    _style(ax, "mirror-descent iteration", r"mean Frank-Wolfe gap $G_k$",
+           "Certified bound on this hop's suboptimality\n(dotted: hop boundary, where the energy changes)")
     fig.tight_layout()
     fig.savefig(out, dpi=200)
     plt.close(fig)

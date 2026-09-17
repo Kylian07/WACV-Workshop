@@ -106,7 +106,8 @@ def main():
             "iid_updates": m["avg_updates"], "updates_per_step": m["updates_per_step"],
             "spearman_halt_hops": m.get("spearman_halt_hops"),
             "acc_by_hops": m["acc_by_hops"], "frontier": m["frontier"],
-            "gap_curve": m["gap_curve"], "halt_vs_hops": m.get("halt_vs_hops"),
+            "gap_curve": m["gap_curve"], "inner_gap_curve": m.get("inner_gap_curve"),
+            "halt_vs_hops": m.get("halt_vs_hops"),
             "drift_per_step": measure_drift(model, va, cfg, device=args.device),
         }
         json.dump(results, open(Path(args.out) / f"results_{args.split}.json", "w"), indent=2)

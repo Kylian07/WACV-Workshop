@@ -43,10 +43,13 @@ class Config:
     dropout: float = 0.15
 
     # ---- halting --------------------------------------------------------
-    gap_mode: str = "relative"        # certificate on G_t / G_0 (scale-free) or raw G_t
-    delta: float = 1e-4               # outer rule: stop when a hop moves belief by < delta
-    eps: float = 0.10                 # certificate threshold used at test time
-    eps_sweep: tuple = (0.9, 0.7, 0.5, 0.35, 0.2, 0.1, 0.05, 0.0)
+    gap_mode: str = "relative"        # thresholds are relative to the first value, so a
+                                      # single global threshold works across examples
+    eps: float = 0.10                 # INNER rule: stop iterating this hop when
+                                      #   G_k <= eps * G_0   (Thm. A -- eps-optimal)
+    delta: float = 0.05               # OUTER rule: stop hopping when
+                                      #   KL(p_h||p_h-1) <= delta * KL(p_1||p_0)
+    eps_sweep: tuple = (0.5, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01, 0.0)   # swept over delta
     anytime_loss: str = "uniform"     # uniform | last | linear
 
     # ---- optimisation ---------------------------------------------------

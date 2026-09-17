@@ -3,3 +3,5 @@
 /usr/local/lib/python3.11/dist-packages/torch/utils/data/dataloader.py:759: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
   super().__init__(loader)
   ep0 step100 loss 1.7661 acc 0.3287 (13s)
+[ep 0] val acc 0.4370 @ eps=0.1 (steps 3.78)  acc_full 0.4377
+  ep1 step200 loss 1.4277 acc 0.4730 (28s)

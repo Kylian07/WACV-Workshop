@@ -98,15 +98,18 @@ def main():
             "iid_updates": iid["avg_updates"],
             "updates_per_step": iid["updates_per_step"],
             "spearman_halt_hops": iid.get("spearman_halt_hops"),
+            "halt_vs_hops": iid.get("halt_vs_hops"),
             "acc_by_hops": iid["acc_by_hops"],
             "ood_acc_sameT": deep["acc_full"],
             "ood_acc_moreT": deep_more["acc_full"],
             "frontier": iid["frontier"],
             "gap_curve": iid["gap_curve"],
+            "inner_gap_curve": iid.get("inner_gap_curve"),
             "drift_per_step": drift,
         }
         print(json.dumps({k: v for k, v in results[name].items()
-                          if k not in ("frontier", "gap_curve", "drift_per_step")}, indent=2))
+                          if k not in ("frontier", "gap_curve", "inner_gap_curve",
+                                       "drift_per_step", "halt_vs_hops")}, indent=2))
         json.dump(results, open(Path(args.out) / "results.json", "w"), indent=2)
 
     print("\n" + "=" * 78)

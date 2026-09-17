@@ -117,12 +117,18 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     model.eval()
     dl = DataLoader(ds, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
     T = n_steps or cfg.n_steps
+    # The sweep is over the OUTER threshold delta, which decides how many hops to
+    # take.  The inner gap threshold eps decides how many mirror-descent
+    # iterations each hop costs; it is held at cfg.eps and enters through the
+    # update accounting, not through the answer.
     eps_list = list(cfg.eps_sweep)
     correct = {e: 0 for e in eps_list}
     steps = {e: 0.0 for e in eps_list}
+    updates = {e: 0.0 for e in eps_list}
     n, acc_full = 0, 0
     per_hop = {}
     gap_curve = torch.zeros(T)
+    inner_curve = None
     halt_vs_hops = []
     traces = []
 
@@ -141,34 +147,48 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
         logits = torch.stack(st.logits, dim=1)                 # (B, T+1, A)
         gaps = torch.stack(st.gap, dim=1) if (st.gap and has_cert) else None
         moves = torch.stack(st.move, dim=1) if (st.move and has_cert) else None
-        delta = float(getattr(model.reasoner, "delta", 0.0))
+        inner = torch.stack(st.inner_gap, dim=1) if (st.inner_gap and has_cert) else None
         y = batch["answer"]
         B = y.shape[0]
         n += B
         acc_full += (logits[:, -1].argmax(-1) == y).sum().item()
         if gaps is not None:
             gap_curve[: gaps.shape[1]] += gaps.float().mean(0).cpu()[:T]
+        if inner is not None:
+            m = inner.float().mean(0).cpu()
+            inner_curve = m if inner_curve is None else inner_curve + m
+
+        # cost of each hop in mirror-descent iterations, under the inner rule
+        if inner is not None:
+            ig = inner.view(B, gaps.shape[1], -1)                      # (B,H,K)
+            g0 = ig[:, :1, :1].clamp_min(1e-8)
+            hit = ig <= (cfg.eps * g0)
+            cost = torch.where(hit.any(-1), hit.float().argmax(-1) + 1.0,
+                               torch.full_like(ig[..., 0], float(ig.shape[-1])))
+        else:
+            cost = None
 
         for e in eps_list:
-            if gaps is None or e <= 0:
+            if moves is None or e <= 0:
                 t_idx = torch.full((B,), logits.shape[1] - 1, device=device, dtype=torch.long)
             else:
-                below = gaps <= e
-                if moves is not None:
-                    below = below | (moves <= delta)
+                below = moves <= e
                 first = torch.where(below.any(1), below.float().argmax(1),
-                                    torch.full_like(y, gaps.shape[1] - 1))
+                                    torch.full_like(y, moves.shape[1] - 1))
                 t_idx = first.clamp(max=logits.shape[1] - 1)
             pick = logits[torch.arange(B, device=device), t_idx]
             correct[e] += (pick.argmax(-1) == y).sum().item()
             steps[e] += (t_idx + 1).float().sum().item()
+            if cost is not None:
+                keep = (torch.arange(cost.shape[1], device=device)[None, :] <= t_idx[:, None])
+                updates[e] += (cost * keep).sum().item()
+            else:
+                updates[e] += (t_idx + 1).float().sum().item() * per_step
 
-        if gaps is not None and "hops" in batch:
-            below = gaps <= cfg.eps
-            if moves is not None:
-                below = below | (moves <= delta)
+        if moves is not None and "hops" in batch:
+            below = moves <= float(getattr(model.reasoner, "delta", 0.0))
             first = torch.where(below.any(1), below.float().argmax(1),
-                                torch.full_like(y, gaps.shape[1] - 1))
+                                torch.full_like(y, moves.shape[1] - 1))
             halt_vs_hops.append(torch.stack([first.float(), batch["hops"].float()], -1).cpu())
 
         if "hops" in batch:
@@ -190,13 +210,16 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     out = {
         "n": n,
         "acc_full": acc_full / n,
-        "acc_eps": correct[cfg.eps] / n if cfg.eps in correct else acc_full / n,
-        "avg_steps": steps[cfg.eps] / n if cfg.eps in steps else float(T),
+        "acc_eps": correct[cfg.delta] / n if cfg.delta in correct else acc_full / n,
+        "avg_steps": steps[cfg.delta] / n if cfg.delta in steps else float(T),
         "updates_per_step": per_step,
-        "avg_updates": (steps[cfg.eps] / n if cfg.eps in steps else float(T)) * per_step,
-        "frontier": [{"eps": e, "acc": correct[e] / n, "steps": steps[e] / n,
-                      "updates": (steps[e] / n) * per_step} for e in eps_list],
+        "avg_updates": (updates[cfg.delta] / n if cfg.delta in updates
+                        else float(T) * per_step),
+        "frontier": [{"delta": e, "acc": correct[e] / n, "steps": steps[e] / n,
+                      "updates": updates[e] / n} for e in eps_list],
         "gap_curve": (gap_curve / max(1, len(dl))).tolist(),
+        "inner_gap_curve": ((inner_curve / max(1, len(dl))).tolist()
+                            if inner_curve is not None else None),
         "acc_by_hops": {k: c / t for k, (c, t) in sorted(per_hop.items()) if t > 0},
     }
     if halt_vs_hops:
