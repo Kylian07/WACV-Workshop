@@ -23,3 +23,6 @@
   ep6 step1300 loss 0.7467 acc 0.7881 (174s)
 [ep 6] val acc 0.6907 @ eps=0.1 (steps 2.00)  acc_full 0.7880
   ep7 step1400 loss 0.7112 acc 0.8014 (188s)
+[ep 7] val acc 0.7167 @ eps=0.1 (steps 2.00)  acc_full 0.8037
+  ep8 step1500 loss 0.7087 acc 0.7910 (202s)
+  ep8 step1600 loss 0.6714 acc 0.8147 (215s)

@@ -120,7 +120,8 @@ trail/models/baselines.py      attn1 / free-form latent / MAC / FiLM, same backb
 trail/data/                    clevr.py (streaming reader, splits, feature cache), gqa.py, synthetic.py
 trail/train.py                 anytime loss, ε-sweep evaluation, drift measurement
 trail/analysis/figures.py      every figure in the paper
-scripts/run_{synthetic,clevr}.py
+trail/data/features.py         the shared frozen-trunk cache both real datasets use
+scripts/run_{synthetic,clevr,gqa}.py, eval_extrapolation.py, report.py, make_notebook.py
 paper/TRAIL_paper.md           draft with full proofs
 ```
 
