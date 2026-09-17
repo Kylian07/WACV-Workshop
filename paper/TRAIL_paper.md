@@ -31,11 +31,12 @@ negative entropy **independently of the number of atoms**, which prescribes the 
 `η = 1/(4β)` and gives an `O(4β log N / T)` rate. Softmax cross-attention is recovered
 exactly as one step of the method.
 
-Under matched budgets, TRAIL matches or exceeds free-form latent recursion, MAC and FiLM on
-CLEVR while spending [X]× fewer reasoning steps on average; the step at which its
-certificate fires correlates with CLEVR's ground-truth program depth (Spearman ρ = [X])
-without ever being supervised on it; and on a depth-extrapolation split it recovers [X]
-points over fixed-depth recurrences purely by iterating longer at test time.
+Under matched budgets, TRAIL [X] against free-form latent recursion, MAC and FiLM while
+tracing an accuracy/compute frontier from a *single* trained model, where every fixed-depth
+baseline contributes only a point. We also report where the picture does not hold: the step
+at which the certificate fires does **not** track ground-truth reasoning depth (ρ =
+0.06-0.08 where the rule has any variance at all), and we give a mechanistic account of why
+a learned transport operator should not be expected to make it.
 
 ---
 
@@ -67,9 +68,9 @@ and an `O(4β log N / T)` rate that does not degrade as the atom grid is refined
 belief-stationarity rule for the outer loop; and Prop. 3, which predicts that halting time
 scales as `1/Δ` in the decision margin — i.e. that harder questions get more compute, for
 free.
-(C4) Empirically: an accuracy/compute frontier traced by one trained model, halting steps
-that track ground-truth program depth without supervision, zero measured drift, and
-improved depth extrapolation.
+(C4) Empirically: an accuracy/compute frontier traced by one trained model, zero measured
+drift, and a decodable trace. We also report a **negative** result: the halting step does
+*not* track ground-truth hop count (§5.3), and we identify why.
 
 ## 2 Related work
 
@@ -250,12 +251,45 @@ budget and is described as such.
 * **5.1 HOPWORLD** (controlled): exact hop counts, so ρ(halt, hops) and depth extrapolation
   are measurable without confounds. Table 1.
 * **5.2 CLEVR** (iid): accuracy vs average steps; the ε-sweep frontier of Fig. 4. Table 2.
-* **5.3 Does the certificate find difficulty?** Halting step vs CLEVR program depth
-  (Spearman ρ), Fig. 6. The key *unsupervised* result.
+* **5.3 Does the certificate find difficulty?** Halting step vs ground-truth hop count.
+  **On HOPWORLD it does not**, and the negative result is reported in §5.3 below rather
+  than buried. Fig. 6.
 * **5.4 Traces** — `p_t` over the atom grid, Fig. 7; soft cardinality vs true object count.
 * **5.5 Generalisation** — depth-extrapolation split (train ≤10 program nodes, test ≥15),
   evaluated at `H` and at `2H` steps; held-out attribute combination (red ∧ cube).
 * **5.6 Ablations** — β=0, learned η, last-step loss, flat (K=1), fixed T. Table 3.
+
+### 5.3 (measured) The halting rule does not track ground-truth difficulty
+
+Prop. 3 predicts that halting time scales as `1/Δ` in the decision margin, so harder
+questions should get more steps for free. On HOPWORLD, **it does not happen.** Sweeping the
+outer threshold δ on a trained TRAIL model (24k train / 3k val, 4 hops × 3 inner steps):
+
+| δ | mean hops | std | ρ(halt, true hops) | accuracy |
+|---|---|---|---|---|
+| 0.50 - 0.10 | 2.00 | 0.000 | undefined | 73.3 |
+| 0.05 | 2.00 | 0.026 | 0.011 | 73.3 |
+| 0.02 | 2.21 | 0.408 | 0.057 | 76.7 |
+| 0.01 | 2.64 | 0.603 | 0.076 | 79.3 |
+| 0.00 (fixed depth) | 4.00 | 0.000 | undefined | 81.2 |
+
+Two things are worth separating. Over most of the threshold range the rule **saturates**:
+every example halts at exactly hop 2, so ρ is undefined for lack of variance rather than
+measurably zero. Where there is variance (δ = 0.01-0.02), ρ = 0.06-0.08, i.e. nothing.
+Reporting ρ at a single threshold would have hidden which of these was happening, which is
+why the code reports the spread alongside the correlation at every threshold.
+
+**Why.** Prop. 3 is a statement about iterating a *fixed* energy, and it is true there (the
+test verifies the bound). The gap between theory and measurement is that `M_h` is a dense
+learned operator, not a single ground-truth relation: one application can compose several
+hops of the underlying task, so the number of TRAIL hops has no reason to equal the number
+of program hops. The theory bounds how long it takes to solve *a* hop; it says nothing about
+how many of the task's hops the model chooses to pack into one.
+
+This is a concrete, testable diagnosis rather than a shrug, and it points at the obvious
+follow-up: constrain `M_h` (low rank, spatial locality, or a penalty on composing) so that
+one application is one relation, and re-measure ρ. Until that is done, the paper claims
+compute adaptivity and interpretability, **not** unsupervised difficulty estimation.
 
 ## 6 Limitations
 

@@ -108,6 +108,7 @@ def main():
             "acc_by_hops": m["acc_by_hops"], "frontier": m["frontier"],
             "gap_curve": m["gap_curve"], "inner_gap_curve": m.get("inner_gap_curve"),
             "halt_vs_hops": m.get("halt_vs_hops"),
+            "halt_stats_by_delta": m.get("halt_stats_by_delta"),
             "drift_per_step": measure_drift(model, va, cfg, device=args.device),
         }
         json.dump(results, open(Path(args.out) / f"results_{args.split}.json", "w"), indent=2)

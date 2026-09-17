@@ -40,8 +40,22 @@ Then:
 | **backward compatible** | softmax cross-attention is exactly one step (`T=1, β=0, η=1`) |
 
 The claim the code is built to support: **equal or better accuracy at a fraction of the
-reasoning steps, with a decodable trace and better generalisation to questions needing more
-hops than anything seen in training** — not a new number on a saturated benchmark.
+reasoning steps, with a decodable trace** — not a new number on a saturated benchmark.
+
+### Measured so far, including what failed
+
+On HOPWORLD (24k train, 4 hops × 3 inner steps), one trained TRAIL model traces a whole
+frontier by sweeping the outer threshold δ: 81.2% at 6.32 belief updates → 79.3% at 4.96
+→ 73.3% at 4.32. Drift is 4×10⁻⁴, i.e. zero up to the tolerance of the projection solver,
+as Prop. 2 requires.
+
+**What did not work:** the halting step does *not* track ground-truth hop count.
+Over most of the δ range the rule saturates at exactly 2 hops (std 0.000, so ρ is undefined
+rather than zero); where it has variance, ρ = 0.06–0.08. Prop. 3 is a statement about
+iterating a *fixed* energy and is true there, but `M_h` is a dense learned operator, so one
+application can compose several hops of the task and the two counts need not agree. See
+`paper/TRAIL_paper.md` §5.3 — the diagnosis and the follow-up it implies are written up
+there, not buried.
 
 ## The theory, and how to check it in one minute
 

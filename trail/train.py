@@ -128,6 +128,7 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     updates = {e: 0.0 for e in eps_list}
     n, acc_full = 0, 0
     per_hop = {}
+    halt_by_delta = {e: [] for e in cfg.eps_sweep}
     gap_curve = torch.zeros(T)
     inner_curve = None
     halt_vs_hops = []
@@ -185,6 +186,9 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
                 updates[e] += (cost * keep).sum().item()
             else:
                 updates[e] += (t_idx + 1).float().sum().item() * per_step
+            if "hops" in batch and moves is not None:
+                halt_by_delta[e].append(
+                    torch.stack([t_idx.float(), batch["hops"].float()], -1).cpu())
 
         if moves is not None and "hops" in batch:
             below = moves <= float(getattr(model.reasoner, "delta", 0.0))
@@ -208,7 +212,7 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
                                "answer": int(y[b].item()),
                                "hops": int(batch["hops"][b].item()) if "hops" in batch else -1})
 
-    out = {
+    out: dict = {
         "n": n,
         "acc_full": acc_full / n,
         "acc_eps": correct[cfg.delta] / n if cfg.delta in correct else acc_full / n,
@@ -223,6 +227,20 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
                             if inner_curve is not None else None),
         "acc_by_hops": {k: c / t for k, (c, t) in sorted(per_hop.items()) if t > 0},
     }
+    # Prop. 3 predicts halting time tracks difficulty.  Reporting it at one
+    # threshold hides the failure mode: if the rule saturates, every example halts
+    # at the same step and the correlation is undefined for lack of variance
+    # rather than false.  So report rho *and* the spread at every threshold.
+    out["halt_stats_by_delta"] = {}
+    for e, chunks in halt_by_delta.items():
+        if not chunks:
+            continue
+        hv = torch.cat(chunks).numpy()
+        out["halt_stats_by_delta"][str(e)] = {
+            "rho": _spearman(hv[:, 0], hv[:, 1]),
+            "mean_halt": float(hv[:, 0].mean() + 1),
+            "std_halt": float(hv[:, 0].std()),
+        }
     if halt_vs_hops:
         hv = torch.cat(halt_vs_hops).numpy()
         out["halt_vs_hops"] = hv.tolist()[:20000]
