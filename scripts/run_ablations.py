@@ -61,11 +61,16 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     rows = {}
     for name, (over, why) in ABLATIONS.items():
-        cfg = Config(dataset="synthetic", reasoner="trail", grid=7, d_vis=128, d_ctrl=128,
-                     d_hidden=256, n_steps=4, inner_steps=3, beta=1.0, epochs=args.epochs,
-                     batch_size=128, lr=1e-3, warmup=100, max_q_len=12, num_workers=0,
-                     use_count=False, dropout=0.0, amp=args.device.startswith("cuda"),
-                     out_dir=str(Path(args.out) / name.replace(" ", "_")), **over)
+        # Build the kwargs first and let the ablation override them. Splatting `over`
+        # into a call that already names beta/n_steps/inner_steps is a TypeError the
+        # moment an ablation touches one of those, which is exactly what they do.
+        kw = dict(dataset="synthetic", reasoner="trail", grid=7, d_vis=128, d_ctrl=128,
+                  d_hidden=256, n_steps=4, inner_steps=3, beta=1.0, epochs=args.epochs,
+                  batch_size=128, lr=1e-3, warmup=100, max_q_len=12, num_workers=0,
+                  use_count=False, dropout=0.0, amp=args.device.startswith("cuda"),
+                  out_dir=str(Path(args.out) / name.replace(" ", "_")))
+        kw.update(over)
+        cfg = Config(**kw)
         torch.manual_seed(cfg.seed)
         m = VQAModel(cfg, vocab=vocab, n_answers=n_ans, feat_dim=fd)
         print(f"\n=== {name} === ({why})")
