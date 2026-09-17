@@ -102,8 +102,9 @@ def train(model, train_ds, val_ds, cfg, device="cuda", log=print):
         m = evaluate(model, val_ds, cfg, device=device)
         m.update(epoch=ep, train_loss=run_loss / seen, train_acc=run_acc / seen)
         history.append(m)
-        log(f"[ep {ep}] val acc {m['acc_eps']:.4f} @ eps={cfg.eps} "
-            f"(steps {m['avg_steps']:.2f})  acc_full {m['acc_full']:.4f}")
+        log(f"[ep {ep}] val acc {m['acc_eps']:.4f} @ delta={cfg.delta} "
+            f"(hops {m['avg_steps']:.2f}, updates {m['avg_updates']:.2f})  "
+            f"acc_full {m['acc_full']:.4f}")
         torch.save({"model": model.state_dict(), "cfg": vars(cfg)},
                    Path(cfg.out_dir) / "last.pt")
         json.dump(history, open(Path(cfg.out_dir) / "history.json", "w"), indent=2)

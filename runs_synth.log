@@ -5,3 +5,11 @@
   ep0 step100 loss 1.7661 acc 0.3287 (13s)
 [ep 0] val acc 0.4370 @ eps=0.1 (steps 3.78)  acc_full 0.4377
   ep1 step200 loss 1.4277 acc 0.4730 (28s)
+  ep1 step300 loss 1.4354 acc 0.4798 (41s)
+[ep 1] val acc 0.6073 @ eps=0.1 (steps 3.55)  acc_full 0.6103
+  ep2 step400 loss 1.2008 acc 0.6274 (54s)
+  ep2 step500 loss 1.1997 acc 0.6266 (67s)
+[ep 2] val acc 0.6263 @ eps=0.1 (steps 3.11)  acc_full 0.6357
+  ep3 step600 loss 1.0829 acc 0.6589 (81s)
+  ep3 step700 loss 1.0702 acc 0.6574 (94s)
+[ep 3] val acc 0.6373 @ eps=0.1 (steps 2.18)  acc_full 0.6820
