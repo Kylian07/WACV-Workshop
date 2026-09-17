@@ -44,7 +44,8 @@ class VQAModel(nn.Module):
             depth = 4 if cfg.reasoner == "film" else cfg.n_steps * cfg.inner_steps
             self.reasoner = REASONERS[cfg.reasoner](
                 d_vis=cfg.d_vis, d_ctrl=cfg.d_ctrl, n_steps=depth, grid=cfg.grid,
-                share_steps=cfg.share_steps,
+                share_steps=cfg.share_steps, n_heads=cfg.n_heads,
+                use_relational=cfg.baseline_relational,
             )
 
     def encode_visual(self, batch) -> torch.Tensor:

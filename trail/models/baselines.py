@@ -25,16 +25,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .trail_cell import ControlUnit, TrailState
+from .trail_cell import ControlUnit, RelationalTransport, TrailState
+
+
+def _maybe_transport(d_vis, d_ctrl, n_heads, grid, enabled):
+    """Give a baseline the *same* relational transport module TRAIL uses.
+
+    The ablations showed TRAIL's entire accuracy margin comes from the
+    control-conditioned relative-position bias inside this module, which no
+    baseline had. A win at "matched budget" that is really a win at unmatched
+    inductive bias is not a result, so this makes the prior available to every
+    model and leaves mirror descent as the only thing that differs.
+    """
+    if not enabled:
+        return None
+    return RelationalTransport(d_vis, d_ctrl, n_heads, grid, use_pos_bias=True)
+
+
+def _propagate(M, a):
+    """One hop of belief transport: a <- M a, renormalised onto the simplex."""
+    if M is None:
+        return a
+    a = torch.einsum("bij,bj->bi", M, a)
+    return a / a.sum(-1, keepdim=True).clamp_min(1e-12)
 
 
 class Attn1Reasoner(nn.Module):
     """TRAIL with the iteration removed."""
 
-    def __init__(self, d_vis, d_ctrl, **kw):
+    def __init__(self, d_vis, d_ctrl, grid=14, n_heads=4, use_relational=False, **kw):
         super().__init__()
         self.control = ControlUnit(d_ctrl, d_vis, 1)
         self.to_query = nn.Linear(d_ctrl, d_vis)
+        self.transport = _maybe_transport(d_vis, d_ctrl, n_heads, grid, use_relational)
 
     def forward(self, V, q_vec, words, word_mask, n_steps=None, eps=None, record=True, answer_head=None):
         B, N, d = V.shape
@@ -42,6 +65,8 @@ class Attn1Reasoner(nn.Module):
         c = self.control(torch.zeros_like(q_vec), q_vec, words, word_mask, z0, 0)
         s = torch.einsum("bnd,bd->bn", V, self.to_query(c)) / (d ** 0.5)
         p = s.softmax(-1)
+        if self.transport is not None:
+            p = _propagate(self.transport(V, c), p)
         z = torch.einsum("bn,bnd->bd", p, V)
         st = TrailState()
         st.p = [p]
@@ -61,10 +86,12 @@ class FreeFormLatentReasoner(nn.Module):
     capacity.
     """
 
-    def __init__(self, d_vis, d_ctrl, n_steps=8, hidden=512, share_steps=False, **kw):
+    def __init__(self, d_vis, d_ctrl, n_steps=8, hidden=512, share_steps=False,
+                 grid=14, n_heads=4, use_relational=False, **kw):
         super().__init__()
         self.n_steps = n_steps
         self.control = ControlUnit(d_ctrl, d_vis, n_steps, share_steps)
+        self.transport = _maybe_transport(d_vis, d_ctrl, n_heads, grid, use_relational)
         self.read = nn.Linear(d_ctrl, d_vis)
         self.upd = nn.Sequential(nn.Linear(2 * d_vis + d_ctrl, hidden), nn.ELU(),
                                  nn.Linear(hidden, d_vis))
@@ -79,13 +106,16 @@ class FreeFormLatentReasoner(nn.Module):
         for t in range(T):
             c = self.control(c, q_vec, words, word_mask, z, t)
             s = torch.einsum("bnd,bd->bn", V, self.read(c)) / (d ** 0.5)
-            ctx = torch.einsum("bn,bnd->bd", s.softmax(-1), V)
+            a = s.softmax(-1)
+            if self.transport is not None:
+                a = _propagate(self.transport(V, c), a)
+            ctx = torch.einsum("bn,bnd->bd", a, V)
             z = self.norm(z + self.upd(torch.cat([z, ctx, c], -1)))
             if record:
-                st.p.append(s.softmax(-1))
+                st.p.append(a)
                 st.gap.append(torch.zeros(B, device=V.device))
                 if answer_head is not None:
-                    st.logits.append(answer_head(z, c, q_vec, s.softmax(-1), s))
+                    st.logits.append(answer_head(z, c, q_vec, a, s))
         st.halt_step = torch.full((B,), float(T), device=V.device)
         st.z_final = z          # consumed by the drift measurement in Fig. 3
         return st
@@ -94,10 +124,12 @@ class FreeFormLatentReasoner(nn.Module):
 class MACReasoner(nn.Module):
     """Compact MAC cell: control, read (attention over atoms), write (gated memory)."""
 
-    def __init__(self, d_vis, d_ctrl, n_steps=12, share_steps=False, **kw):
+    def __init__(self, d_vis, d_ctrl, n_steps=12, share_steps=False,
+                 grid=14, n_heads=4, use_relational=False, **kw):
         super().__init__()
         self.n_steps = n_steps
         self.control = ControlUnit(d_ctrl, d_vis, n_steps, share_steps)
+        self.transport = _maybe_transport(d_vis, d_ctrl, n_heads, grid, use_relational)
         self.mem_proj = nn.Linear(d_vis, d_vis)
         self.read_proj = nn.Linear(2 * d_vis, d_vis)
         self.attn = nn.Linear(d_vis, 1)
@@ -117,6 +149,8 @@ class MACReasoner(nn.Module):
             inter = self.mem_proj(m).unsqueeze(1) * V
             feat = self.read_proj(torch.cat([inter, V], -1)) * self.q_read(c).unsqueeze(1)
             a = self.attn(torch.tanh(feat)).softmax(1)
+            if self.transport is not None:
+                a = _propagate(self.transport(V, c), a.squeeze(-1)).unsqueeze(-1)
             r = (a * V).sum(1)
             g = torch.sigmoid(self.gate(c))
             m = self.norm(g * self.write(torch.cat([m, r], -1)) + (1 - g) * m)

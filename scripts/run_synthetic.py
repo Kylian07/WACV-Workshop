@@ -51,6 +51,10 @@ def main():
     # the same 12 (model.py multiplies them out), which is also MAC's standard depth.
     ap.add_argument("--hops", type=int, default=4)
     ap.add_argument("--inner", type=int, default=3)
+    # Matched inductive bias, not just matched budget.  The ablations showed TRAIL's
+    # margin comes from the control-conditioned position bias inside its transport
+    # module, which no baseline had; this hands the same module to every model.
+    ap.add_argument("--baseline-relational", action="store_true")
     args = ap.parse_args()
 
     n_train, n_val, epochs = (4000, 1000, 4) if args.quick else (40000, 6000, 12)
@@ -75,6 +79,7 @@ def main():
             max_q_len=12, eps=0.10, out_dir=str(Path(args.out) / name),
             num_workers=0, amp=args.device.startswith("cuda"), seed=args.seed,
             use_count=False, dropout=0.0,
+            baseline_relational=args.baseline_relational,
         )
         torch.manual_seed(cfg.seed)
         model = build(cfg, vocab, n_ans, feat_dim, args.device)

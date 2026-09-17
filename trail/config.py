@@ -39,6 +39,9 @@ class Config:
     eta_safety: float = 1.0
     use_transport: bool = True        # ablation: beta = 0 (pure MWU over atoms)
     use_pos_bias: bool = True
+    baseline_relational: bool = False  # give the baselines TRAIL's transport module,
+                                       # so the comparison is matched in inductive bias
+                                       # and not only in belief updates
     share_steps: bool = False         # tie every hop to one operator; required for the
                                       # depth-extrapolation claim to be testable at all
     use_count: bool = True
