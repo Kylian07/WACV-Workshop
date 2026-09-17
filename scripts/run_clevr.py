@@ -103,6 +103,7 @@ def main():
         results[name] = {
             "params": n_par, "train_time_s": round(time.time() - t0, 1),
             "iid_acc": m["acc_full"], "iid_acc_eps": m["acc_eps"], "iid_steps": m["avg_steps"],
+            "iid_updates": m["avg_updates"], "updates_per_step": m["updates_per_step"],
             "spearman_halt_hops": m.get("spearman_halt_hops"),
             "acc_by_hops": m["acc_by_hops"], "frontier": m["frontier"],
             "gap_curve": m["gap_curve"], "halt_vs_hops": m.get("halt_vs_hops"),

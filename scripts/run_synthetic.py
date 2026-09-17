@@ -95,6 +95,8 @@ def main():
             "iid_acc": iid["acc_full"],
             "iid_acc_eps": iid["acc_eps"],
             "iid_steps": iid["avg_steps"],
+            "iid_updates": iid["avg_updates"],
+            "updates_per_step": iid["updates_per_step"],
             "spearman_halt_hops": iid.get("spearman_halt_hops"),
             "acc_by_hops": iid["acc_by_hops"],
             "ood_acc_sameT": deep["acc_full"],

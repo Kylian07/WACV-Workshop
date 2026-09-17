@@ -37,11 +37,13 @@ class VQAModel(nn.Module):
                 delta=cfg.delta, gap_mode=cfg.gap_mode,
             )
         else:
-            # Baselines get n_steps * inner_steps iterations so that every model in
-            # the table is allowed the same number of belief updates.
+            # The iterative baselines get n_steps * inner_steps iterations, so every
+            # model in the table is allowed the same number of belief updates.  FiLM
+            # is not an iterative reasoner -- its "steps" are residual conv blocks --
+            # so it keeps its standard depth of 4 and is reported as such.
+            depth = 4 if cfg.reasoner == "film" else cfg.n_steps * cfg.inner_steps
             self.reasoner = REASONERS[cfg.reasoner](
-                d_vis=cfg.d_vis, d_ctrl=cfg.d_ctrl,
-                n_steps=cfg.n_steps * cfg.inner_steps, grid=cfg.grid,
+                d_vis=cfg.d_vis, d_ctrl=cfg.d_ctrl, n_steps=depth, grid=cfg.grid,
             )
 
     def encode_visual(self, batch) -> torch.Tensor:

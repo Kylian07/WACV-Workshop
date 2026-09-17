@@ -222,10 +222,18 @@ what §5.3 measures. Stating this explicitly is cheaper than having a reviewer s
 ## 5 Experiments
 
 **Protocol.** Every model shares the backbone, question encoder, read-out head, optimiser
-and budget; only the reasoning module differs. Budgets are matched in *belief updates*
-(TRAIL `H×K = 4×3 = 12`; baselines 12, which is also MAC's standard depth). Numbers are not
-comparable to published CLEVR results obtained with ResNet-101 conv4 features and days of
-training; this is an internal comparison and is described as such.
+and budget; only the reasoning module differs. Budgets are matched in **belief updates**,
+not in "steps": TRAIL's `H×K = 4×3 = 12` updates against 12 iterations for the iterative
+baselines, which is also MAC's standard depth. FiLM is not an iterative reasoner — its
+"steps" are residual conv blocks — so it keeps its standard depth of 4 and is reported as
+such rather than pretending to a matched budget. Reporting hops and iterations on the same
+axis would compare two different units, so every table and Fig. 4's x-axis is in belief
+updates. Note that TRAIL builds its `O(N²)` transport operator once per *hop*, so at the
+same update budget it performs fewer of the expensive operations than a flat recursion.
+
+Numbers are not comparable to published CLEVR results obtained with ResNet-101 conv4
+features at full resolution and days of training; this is an internal comparison at matched
+budget and is described as such.
 
 * **5.1 HOPWORLD** (controlled): exact hop counts, so ρ(halt, hops) and depth extrapolation
   are measurable without confounds. Table 1.

@@ -38,15 +38,19 @@ def fig_frontier(results: dict, out: Path):
     asymmetry is the compute-adaptivity claim in one picture.
     """
     fig, ax = plt.subplots(figsize=(5.2, 3.6))
+
+    def _updates(r, key="iid_steps"):
+        return r.get("iid_updates", r[key] * r.get("updates_per_step", 1))
+
     for name, r in results.items():
         if name == "trail" and r.get("frontier"):
-            f = sorted(r["frontier"], key=lambda d: d["steps"])
-            ax.plot([d["steps"] for d in f], [100 * d["acc"] for d in f],
+            f = sorted(r["frontier"], key=lambda d: d.get("updates", d["steps"]))
+            ax.plot([d.get("updates", d["steps"]) for d in f], [100 * d["acc"] for d in f],
                     "-o", color=C[name], ms=4, lw=1.8, label=LBL[name])
         else:
-            ax.scatter([r["iid_steps"]], [100 * r["iid_acc"]], color=C.get(name, "k"),
+            ax.scatter([_updates(r)], [100 * r["iid_acc"]], color=C.get(name, "k"),
                        marker="s", s=45, label=LBL.get(name, name), zorder=3)
-    _style(ax, "average reasoning steps", "accuracy (%)",
+    _style(ax, "average belief updates (matched unit across models)", "accuracy (%)",
            "One model, a whole compute-accuracy frontier")
     ax.legend(frameon=False, fontsize=8)
     fig.tight_layout()

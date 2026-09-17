@@ -54,7 +54,14 @@ class AtomProjector(nn.Module):
             B, C, H, W = feat.shape
             feat = feat.flatten(2).transpose(1, 2)
         B, N, C = feat.shape
-        pos = self.pos[:N].unsqueeze(0).expand(B, N, 2).to(feat.dtype)
+        if N <= self.pos.shape[0]:
+            pos = self.pos[:N]
+        else:                      # evaluated on a finer grid than it was built for
+            g = int(round(N ** 0.5))
+            ys, xs = torch.meshgrid(torch.linspace(-1, 1, g, device=feat.device),
+                                    torch.linspace(-1, 1, g, device=feat.device), indexing="ij")
+            pos = torch.stack([ys, xs], -1).reshape(-1, 2)[:N]
+        pos = pos.unsqueeze(0).expand(B, N, 2).to(feat.dtype)
         v = self.proj(torch.cat([feat, pos], -1))
         v = self.norm(v)
         return torch.nn.functional.normalize(v, dim=-1)

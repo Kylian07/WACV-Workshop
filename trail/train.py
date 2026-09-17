@@ -130,6 +130,10 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     # to their fixed budget, otherwise the sweep would "halt" them at step 1 on a
     # gap vector that is identically zero by construction.
     has_cert = bool(getattr(model.reasoner, "produces_certificate", False))
+    # TRAIL counts hops, the baselines count iterations.  One hop costs
+    # ``inner_steps`` belief updates, so the frontier is reported in *belief
+    # updates* -- otherwise the x-axis of Fig. 4 would be comparing two units.
+    per_step = int(getattr(model.reasoner, "inner_steps", 1))
 
     for batch in dl:
         batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
@@ -188,7 +192,10 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
         "acc_full": acc_full / n,
         "acc_eps": correct[cfg.eps] / n if cfg.eps in correct else acc_full / n,
         "avg_steps": steps[cfg.eps] / n if cfg.eps in steps else float(T),
-        "frontier": [{"eps": e, "acc": correct[e] / n, "steps": steps[e] / n} for e in eps_list],
+        "updates_per_step": per_step,
+        "avg_updates": (steps[cfg.eps] / n if cfg.eps in steps else float(T)) * per_step,
+        "frontier": [{"eps": e, "acc": correct[e] / n, "steps": steps[e] / n,
+                      "updates": (steps[e] / n) * per_step} for e in eps_list],
         "gap_curve": (gap_curve / max(1, len(dl))).tolist(),
         "acc_by_hops": {k: c / t for k, (c, t) in sorted(per_hop.items()) if t > 0},
     }

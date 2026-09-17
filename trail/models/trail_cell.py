@@ -104,7 +104,7 @@ class RelationalTransport(nn.Module):
         qv = self.q(torch.cat([V, cc], -1)).view(B, N, self.h, self.dk).transpose(1, 2)
         kv = self.k(torch.cat([V, cc], -1)).view(B, N, self.h, self.dk).transpose(1, 2)
         logits = torch.einsum("bhjd,bhid->bhji", qv, kv) / (self.dk ** 0.5)   # (B,h,j,i)
-        if self.use_pos_bias:
+        if self.use_pos_bias and self.rel.shape[0] == N:
             basis = self.pos(c).view(B, self.h, 9)                            # (B,h,9)
             logits = logits + torch.einsum("bhk,jik->bhji", basis, self.rel)
         M = logits.softmax(dim=2).mean(dim=1)      # softmax over destination j
