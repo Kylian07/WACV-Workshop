@@ -191,50 +191,18 @@ def build_vocab(recs, min_count: int = 1):
 # --------------------------------------------------------------------------
 # feature cache
 # --------------------------------------------------------------------------
-@torch.no_grad()
 def cache_features(root: Path, cfg, image_indices, split: str, device="cuda"):
-    """Run the frozen trunk once over the images we actually need."""
-    from PIL import Image
-    from torchvision import transforms
+    """CLEVR images are CLEVR_<split>_%06d.png under images/<split>/."""
+    from .features import cache_features as _cache
 
-    from ..models.backbone import build_resnet_trunk
-
-    os.makedirs(cfg.cache_dir, exist_ok=True)
-    tag = f"{split}_{cfg.features}_{cfg.image_size}_{len(image_indices)}"
-    fpath = Path(cfg.cache_dir) / f"feat_{tag}.npy"
-    ipath = Path(cfg.cache_dir) / f"idx_{tag}.json"
-    trunk, ch = build_resnet_trunk(cfg.features, pretrained=True)
-    N = cfg.grid * cfg.grid
-    if fpath.exists() and ipath.exists():
-        return np.load(fpath, mmap_mode="r"), json.load(open(ipath)), ch
-
-    trunk = trunk.to(device).eval()
-    tf = transforms.Compose([
-        transforms.Resize((cfg.image_size, cfg.image_size)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ])
-    idx_list = sorted(image_indices)
-    pos = {ix: i for i, ix in enumerate(idx_list)}
-    mm = np.lib.format.open_memmap(fpath, mode="w+", dtype=np.float16,
-                                   shape=(len(idx_list), N, ch))
     img_dir = root / "images" / split
-    bs, buf, ids = 32, [], []
-    from tqdm.auto import tqdm
-    for ix in tqdm(idx_list, desc=f"featurising {split}"):
-        fn = img_dir / f"CLEVR_{split}_{ix:06d}.png"
-        buf.append(tf(Image.open(fn).convert("RGB")))
-        ids.append(pos[ix])
-        if len(buf) == bs:
-            out = trunk(torch.stack(buf).to(device))
-            mm[ids] = out.flatten(2).transpose(1, 2).half().cpu().numpy()
-            buf, ids = [], []
-    if buf:
-        out = trunk(torch.stack(buf).to(device))
-        mm[ids] = out.flatten(2).transpose(1, 2).half().cpu().numpy()
-    mm.flush()
-    json.dump({str(k): v for k, v in pos.items()}, open(ipath, "w"))
-    return np.load(fpath, mmap_mode="r"), {str(k): v for k, v in pos.items()}, ch
+    if not img_dir.exists():
+        hits = sorted(root.glob(f"**/images/{split}"))
+        if hits:
+            img_dir = hits[0]
+    return _cache(cfg, image_indices,
+                  lambda ix: img_dir / f"CLEVR_{split}_{int(ix):06d}.png",
+                  tag=split, device=device)
 
 
 # --------------------------------------------------------------------------

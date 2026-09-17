@@ -64,6 +64,45 @@ def load_gqa_questions(root: Path, split: str, limit: int = 0):
     return recs
 
 
+def find_gqa_images(root: Path, hint: str | None = None) -> Path:
+    """GQA images are <imageId>.jpg in a flat folder, whose name varies by mirror."""
+    for base in filter(None, [Path(hint) if hint else None, root, root.parent,
+                              Path("/kaggle/input")]):
+        if not Path(base).exists():
+            continue
+        for name in ("images", "gqa_images", "allImages", "raw_images"):
+            d = Path(base) / name
+            if d.is_dir() and any(d.glob("*.jpg")):
+                return d
+        hits = sorted(Path(base).glob("**/*.jpg"))
+        if hits:
+            return hits[0].parent
+    raise FileNotFoundError(
+        "GQA images not found. Attach the GQA images dataset and/or set Config.data_root.")
+
+
+def cache_gqa_features(root: Path, cfg, image_ids, split: str, device="cuda"):
+    from .features import cache_features as _cache
+
+    img_dir = find_gqa_images(root, cfg.data_root)
+    return _cache(cfg, image_ids, lambda ix: img_dir / f"{ix}.jpg",
+                  tag=f"gqa_{split}", device=device)
+
+
+def build_gqa_vocab(recs, min_count: int = 2):
+    """Answers are open-vocabulary in GQA; keep the ones that actually recur."""
+    from collections import Counter
+
+    wc, ac = Counter(), Counter()
+    for r in recs:
+        wc.update(tokenize(r["question"]))
+        if r["answer"] is not None:
+            ac[r["answer"]] += 1
+    words = ["<pad>", "<unk>"] + sorted(w for w, c in wc.items() if c >= min_count)
+    answers = [a for a, c in ac.most_common() if c >= min_count]
+    return {w: i for i, w in enumerate(words)}, {a: i for i, a in enumerate(answers)}
+
+
 class GqaFeatures(Dataset):
     """Same tensor contract as ``ClevrFeatures`` so train.py needs no branches."""
 
