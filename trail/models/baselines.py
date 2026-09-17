@@ -61,10 +61,10 @@ class FreeFormLatentReasoner(nn.Module):
     capacity.
     """
 
-    def __init__(self, d_vis, d_ctrl, n_steps=8, hidden=512, **kw):
+    def __init__(self, d_vis, d_ctrl, n_steps=8, hidden=512, share_steps=False, **kw):
         super().__init__()
         self.n_steps = n_steps
-        self.control = ControlUnit(d_ctrl, d_vis, n_steps)
+        self.control = ControlUnit(d_ctrl, d_vis, n_steps, share_steps)
         self.read = nn.Linear(d_ctrl, d_vis)
         self.upd = nn.Sequential(nn.Linear(2 * d_vis + d_ctrl, hidden), nn.ELU(),
                                  nn.Linear(hidden, d_vis))
@@ -94,10 +94,10 @@ class FreeFormLatentReasoner(nn.Module):
 class MACReasoner(nn.Module):
     """Compact MAC cell: control, read (attention over atoms), write (gated memory)."""
 
-    def __init__(self, d_vis, d_ctrl, n_steps=12, **kw):
+    def __init__(self, d_vis, d_ctrl, n_steps=12, share_steps=False, **kw):
         super().__init__()
         self.n_steps = n_steps
-        self.control = ControlUnit(d_ctrl, d_vis, n_steps)
+        self.control = ControlUnit(d_ctrl, d_vis, n_steps, share_steps)
         self.mem_proj = nn.Linear(d_vis, d_vis)
         self.read_proj = nn.Linear(2 * d_vis, d_vis)
         self.attn = nn.Linear(d_vis, 1)

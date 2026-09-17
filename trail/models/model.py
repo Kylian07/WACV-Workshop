@@ -34,7 +34,7 @@ class VQAModel(nn.Module):
                 n_heads=cfg.n_heads, learn_eta=cfg.learn_eta,
                 eta_safety=cfg.eta_safety, use_transport=cfg.use_transport,
                 use_pos_bias=cfg.use_pos_bias, temp=cfg.temp,
-                delta=cfg.delta, gap_mode=cfg.gap_mode,
+                delta=cfg.delta, gap_mode=cfg.gap_mode, share_steps=cfg.share_steps,
             )
         else:
             # The iterative baselines get n_steps * inner_steps iterations, so every
@@ -44,6 +44,7 @@ class VQAModel(nn.Module):
             depth = 4 if cfg.reasoner == "film" else cfg.n_steps * cfg.inner_steps
             self.reasoner = REASONERS[cfg.reasoner](
                 d_vis=cfg.d_vis, d_ctrl=cfg.d_ctrl, n_steps=depth, grid=cfg.grid,
+                share_steps=cfg.share_steps,
             )
 
     def encode_visual(self, batch) -> torch.Tensor:

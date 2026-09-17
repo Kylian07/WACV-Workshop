@@ -39,6 +39,8 @@ class Config:
     eta_safety: float = 1.0
     use_transport: bool = True        # ablation: beta = 0 (pure MWU over atoms)
     use_pos_bias: bool = True
+    share_steps: bool = False         # tie every hop to one operator; required for the
+                                      # depth-extrapolation claim to be testable at all
     use_count: bool = True
     dropout: float = 0.15
 

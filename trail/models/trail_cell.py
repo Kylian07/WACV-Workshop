@@ -58,16 +58,23 @@ class ControlUnit(nn.Module):
     and nowhere else -- the visual reasoning state stays on the simplex.
     """
 
-    def __init__(self, d_ctrl: int, d_vis: int, n_steps: int):
+    def __init__(self, d_ctrl: int, d_vis: int, n_steps: int, share_steps: bool = False):
         super().__init__()
-        self.step_emb = nn.Parameter(torch.randn(n_steps, d_ctrl) * 0.02)
+        # Per-hop embeddings let each hop specialise, which helps in distribution and
+        # makes depth extrapolation impossible: a model with 4 of them has no way to
+        # express a 5th sub-question, so "just iterate longer" is not available to it.
+        # share_steps=True ties every hop to one operator, which is the setting the
+        # extrapolation claim is actually about.
+        self.share_steps = share_steps
+        self.step_emb = nn.Parameter(torch.randn(1 if share_steps else n_steps, d_ctrl) * 0.02)
         self.mix = nn.Linear(2 * d_ctrl + d_vis, d_ctrl)
         self.score = nn.Linear(d_ctrl, 1)
         self.norm = nn.LayerNorm(d_ctrl)
 
     def forward(self, c_prev, q_vec, words, word_mask, z_t, t):
         # words: (B,L,d_ctrl)  word_mask: (B,L) bool, True = real token
-        q_t = q_vec + self.step_emb[min(t, self.step_emb.shape[0] - 1)]
+        q_t = q_vec + self.step_emb[0 if self.share_steps
+                                    else min(t, self.step_emb.shape[0] - 1)]
         u = self.mix(torch.cat([c_prev, q_t, z_t], dim=-1))
         att = self.score(torch.tanh(u.unsqueeze(1) * words))          # (B,L,1)
         att = att.masked_fill(~word_mask.unsqueeze(-1), -1e4)
@@ -146,13 +153,14 @@ class TrailReasoner(nn.Module):
         temp: float = 1.0,
         delta: float = 1e-4,
         gap_mode: str = "relative",
+        share_steps: bool = False,
     ):
         super().__init__()
         self.produces_certificate = True   # see evaluate() in train.py
         self.n_steps, self.beta, self.temp = n_steps, beta, temp
         self.inner_steps, self.delta, self.gap_mode = inner_steps, delta, gap_mode
         self.use_transport = use_transport and beta > 0
-        self.control = ControlUnit(d_ctrl, d_vis, n_steps)
+        self.control = ControlUnit(d_ctrl, d_vis, n_steps, share_steps)
         self.to_query = nn.Linear(d_ctrl, d_vis)
         self.transport = (
             RelationalTransport(d_vis, d_ctrl, n_heads, grid, use_pos_bias)

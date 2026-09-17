@@ -28,3 +28,9 @@
   ep8 step1600 loss 0.6714 acc 0.8147 (215s)
 [ep 8] val acc 0.7283 @ eps=0.1 (steps 2.00)  acc_full 0.8103
   ep9 step1700 loss 0.6557 acc 0.8176 (229s)
+  ep9 step1800 loss 0.6569 acc 0.8154 (243s)
+[ep 9] val acc 0.7307 @ eps=0.1 (steps 2.00)  acc_full 0.8093
+  ep10 step1900 loss 0.6405 acc 0.8214 (320s)
+  ep10 step2000 loss 0.6448 acc 0.8184 (332s)
+[ep 10] val acc 0.7323 @ eps=0.1 (steps 2.00)  acc_full 0.8130
+  ep11 step2100 loss 0.6416 acc 0.8167 (346s)
