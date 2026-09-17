@@ -31,12 +31,16 @@ negative entropy **independently of the number of atoms**, which prescribes the 
 `η = 1/(4β)` and gives an `O(4β log N / T)` rate. Softmax cross-attention is recovered
 exactly as one step of the method.
 
-Under matched budgets, TRAIL [X] against free-form latent recursion, MAC and FiLM while
-tracing an accuracy/compute frontier from a *single* trained model, where every fixed-depth
-baseline contributes only a point. We also report where the picture does not hold: the step
-at which the certificate fires does **not** track ground-truth reasoning depth (ρ =
-0.06-0.08 where the rule has any variance at all), and we give a mechanistic account of why
-a learned transport operator should not be expected to make it.
+We report what this buys and what it costs. The halting certificate halves the compute at
+identical accuracy, drift is zero to four orders of magnitude, and the trace is the
+computation rather than a saliency map over it. Against that, a matched comparison -- in
+which every baseline is given the same relational prior -- shows the formulation **does not**
+improve accuracy: MAC exceeds it by 9.3 points and a single relational attention step, the
+T=1 case of our own method, exceeds it by 8.4 while spending one belief update against
+twelve. We also report that the certificate's halting step does not track ground-truth
+reasoning depth, and that iterating longer never helps. We give mechanistic accounts of each
+and argue that our synthetic benchmark, on which one dense transport application suffices,
+cannot test iterated reasoning at all.
 
 ---
 
@@ -335,6 +339,67 @@ moves the belief away from the answer rather than refining it. That is a sharper
 problem than the one we set out with, and it is the honest state of the work: TRAIL
 generalises better than every baseline at its native depth, and it cannot buy more
 generalisation with more compute.
+
+### 5.7 (measured) The accuracy claim does not survive a matched comparison
+
+The main table reported TRAIL ahead of every baseline by 19-22 points at a matched
+*budget*. The ablations then showed that margin is carried entirely by the
+control-conditioned relative-position bias inside the transport module (removing it costs
+20.9 points and lands TRAIL in the baseline band) -- a component **no baseline had**. The
+comparison was matched in belief updates and unmatched in inductive bias.
+
+We therefore gave `attn1`, free-form latent recursion and MAC the same
+`RelationalTransport` module, propagating their attention through it exactly as TRAIL
+propagates belief. Each gains the identical 23,012 parameters, leaving mirror descent on the
+simplex as the only remaining difference.
+
+| model | no prior | + prior | change | belief updates |
+|---|---|---|---|---|
+| single cross-attention | 0.619 | **0.896** | +0.277 | **1** |
+| MAC | 0.609 | **0.905** | +0.296 | 12 |
+| free-form latent | 0.602 | 0.721 | +0.119 | 12 |
+| TRAIL | 0.812 | 0.812 | -- | 4.32 |
+
+**The accuracy claim is withdrawn.** It is not narrowed: it is reversed. MAC with a matched
+prior beats TRAIL by 9.3 points, and a *single* relational attention step beats it by 8.4
+while spending one belief update against TRAIL's twelve. By Prop. 1 attention is one TRAIL
+step, so the T=1 case of the method outperforms the method.
+
+**And the benchmark is the deeper problem.** If one application of a dense learned transport
+reaches 89.6%, HOPWORLD does not require iterated reasoning at all, and therefore cannot
+test the hypothesis this paper is about. The mechanism was visible earlier -- Sec. 5.3
+diagnosed the halting failure as `M_h` composing several task hops in one application -- but
+we read it as an explanation for that single failure rather than as evidence that the
+testbed was inadequate. The benchmark is ours, so this is a design error and not a property
+of an inherited task.
+
+Three independent measurements now agree: iteration buys nothing (attn1 within 0.9 of MAC at
+a twelfth of the compute), iterating longer hurts (Sec. 5.5), and constraining the iteration
+to the simplex hurts more (this section).
+
+### 5.8 What the paper can still claim
+
+Everything below is measured, and none of it depends on the withdrawn comparison.
+
+| claim | evidence |
+|---|---|
+| The inner certificate halves compute for free | 12 -> 6.32 belief updates at identical accuracy (0.8123, unchanged to 4 d.p.). Thm. A doing real work, no learned gate. |
+| Zero off-manifold drift | 4x10^-4 against 10.76 for free-form recursion -- four orders of magnitude, as Prop. 2 requires. |
+| The trace is the computation | p_t is the state, not a saliency map over it. |
+| Anytime supervision earns its place in the cheap regime | +19 points over last-step training at 5 belief updates; the frontier is flat rather than cliffed. Cost: a ceiling ~6 points lower. |
+| Attention is one step | Prop. 1, verified exactly in float64. |
+| The two-loop structure | same accuracy as flat, at one third of the O(N^2) transport builds. |
+| The theory | ten numerical checks, all passing. |
+
+And the measured prices, which belong in the same table rather than a footnote: the
+prescribed step size costs **7.7 points** against a learned one (which converges to eta =
+0.961, violating Thm. B's eta <= 1/(4 beta) = 0.25); and the simplex constraint costs
+**8.4 points** against a single unconstrained relational attention step.
+
+The honest summary of this work is therefore: *latent visual reasoning can be made
+on-manifold, certified, interpretable and adaptively cheap, and here is what that costs.*
+That is a smaller claim than the one we set out to make, and it is the one the measurements
+support.
 
 ## 6 Limitations
 

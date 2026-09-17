@@ -219,11 +219,15 @@ def build(out_path: str):
     f_loops = F.fig_two_loops()
     f_map = F.fig_repo_map()
     f_halt = F.fig_halting_saturation(HALT_ROWS)
+    # Plot the MATCHED-prior baselines when they exist.  Plotting the unmatched ones
+    # next to TRAIL's curve is the picture that made the withdrawn claim look true.
+    matched = load_results("runs/matched_prior/results.json")
     f_front = None
     if "trail" in res:
+        src = matched if matched else res
         base = {k: {"updates": v.get("iid_updates", 0), "acc": v["iid_acc"],
-                    "label": LBL.get(k, k)}
-                for k, v in res.items() if k != "trail"}
+                    "label": LBL.get(k, k) + (" + prior" if matched else "")}
+                for k, v in src.items() if k != "trail"}
         f_front = F.fig_frontier(res["trail"]["frontier"], base)
 
     # ---------------------------------------------------------------- cover
@@ -267,10 +271,13 @@ def build(out_path: str):
 
     story += [callout(
         "The honest headline",
-        "Equal or better accuracy at a fraction of the reasoning steps, with a decodable "
-        "trace &#8212; not a new number on a saturated benchmark. One predicted result did "
-        "<b>not</b> hold and is reported as a negative in &#167;6, with a mechanistic "
-        "diagnosis rather than a shrug.", S, GREEN)]
+        "<b>The accuracy claim was tested and withdrawn.</b> Given the same relational prior, "
+        "MAC beats TRAIL by 9.3 points and a <i>single</i> attention step beats it by 8.4 at "
+        "a twelfth of the compute. What survives is measured and real: the halting "
+        "certificate halves compute at identical accuracy, drift is zero to four orders of "
+        "magnitude, and the trace is the computation rather than a saliency map over it. "
+        "This is a paper about what certificates, on-manifold state and interpretability "
+        "<i>cost</i>.", S, RED)]
 
     story += pic(f_arch, 168,
                  "Figure 1. End-to-end flow. Only the reasoning module differs between the "
@@ -555,20 +562,58 @@ def build(out_path: str):
                        f"training.", S["cap"])]
     if f_front:
         story += pic(f_front, 130,
-                     "Figure 4. The compute&#8211;accuracy frontier. TRAIL contributes a "
-                     "<i>curve</i>, traced by sweeping one threshold on one trained model; "
-                     "every fixed-depth baseline can only contribute a point. That asymmetry "
-                     "is the compute-adaptivity claim in one picture.", S)
+                     "Figure 4. The compute&#8211;accuracy frontier, with every baseline given "
+                     "the same relational prior. TRAIL contributes a <i>curve</i>, traced by "
+                     "sweeping one threshold on one trained model, where each fixed-depth "
+                     "baseline contributes a point &#8212; that adaptivity is real. What the "
+                     "figure also shows is that the curve sits <i>below</i> a single matched "
+                     "attention step at a twelfth of the compute, which is why the accuracy "
+                     "claim is withdrawn in &#167;5.2.", S)
 
     story += [para("5.1 What held", S["h2"])] + bullets([
+        "<b>The inner certificate halves compute for free.</b> 12 &#8594; 6.32 belief updates "
+        "at <i>identical</i> accuracy (0.8123, unchanged to four decimal places). Theorem A "
+        "doing real work, with no learned gate and no auxiliary loss.",
         "<b>Zero drift.</b> 4&#215;10<sup>&#8722;4</sup> for TRAIL &#8212; zero up to the "
         "tolerance of the projection solver &#8212; against 10.76 for free-form latent "
         "recursion at the same budget. Prop. 2 confirmed, four orders of magnitude.",
-        "<b>A real frontier from one model.</b> 81.2% at 6.32 belief updates, 79.3% at 4.96, "
-        "73.3% at 4.32 &#8212; all from the same weights, by moving &#948; alone.",
-        "<b>Matched-budget accuracy.</b> 81.2% against free-form latent recursion's 60.2% at "
-        "an identical 12 belief updates, with 34% fewer parameters.",
+        "<b>Anytime supervision pays in the cheap regime.</b> +19 points over last-step "
+        "training at 5 belief updates; the frontier is flat rather than cliffed. It costs a "
+        "ceiling about 6 points lower, which is a trade-off, not a free win.",
+        "<b>The two-loop structure.</b> Same accuracy as the flat variant at one third of the "
+        "O(N<sup>2</sup>) transport builds — and it is what makes the theorems apply to the "
+        "code rather than to an idealisation of it.",
     ], S)
+
+    story += [para("5.2 What did not: the accuracy claim", S["h2"]), para(
+        "The main table showed TRAIL 19&#8211;22 points ahead at a matched <i>budget</i>. The "
+        "ablations then showed that margin is carried entirely by the control-conditioned "
+        "relative-position bias inside the transport module &#8212; removing it costs 20.9 "
+        "points &#8212; and <b>no baseline had that module</b>. The comparison was matched in "
+        "belief updates and unmatched in inductive bias. Giving every baseline the same "
+        "module (identical +23,012 parameters) leaves mirror descent as the only difference:",
+        S["body"])]
+    story += [table([
+        ["Model", "No prior", "With prior", "Change", "Belief updates"],
+        ["Single cross-attention", "0.619", "<b>0.896</b>", "+0.277", "<b>1</b>"],
+        ["MAC", "0.609", "<b>0.905</b>", "+0.296", "12"],
+        ["Free-form latent recursion", "0.602", "0.721", "+0.119", "12"],
+        ["TRAIL (ours)", "0.812", "0.812", "&#8212;", "4.32"],
+    ], [52, 24, 26, 22, 30], S), Spacer(1, 5)]
+    story += [callout(
+        "Reversed, not narrowed",
+        "MAC with a matched prior beats TRAIL by 9.3 points, and a <i>single</i> relational "
+        "attention step beats it by 8.4 while spending one belief update against twelve. By "
+        "Prop. 1 attention is one TRAIL step, so the T=1 case of the method outperforms the "
+        "method. <b>And the benchmark is the deeper problem:</b> if one dense transport "
+        "application reaches 89.6%, HOPWORLD does not require iterated reasoning and cannot "
+        "test the hypothesis this work is about. The benchmark is ours, so that is a design "
+        "error, not a property of an inherited task.", S, RED)]
+    story += [para("The measured prices belong beside the benefits, not in a footnote: the "
+                   "prescribed step size costs <b>7.7 points</b> against a learned one (which "
+                   "converges to &#951; = 0.961, violating Thm. B's &#951; &#8804; 0.25), and "
+                   "the simplex constraint costs <b>8.4 points</b> against one unconstrained "
+                   "relational attention step.", S["body"])]
 
     story += [CondPageBreak(100 * mm), para("6. The negative result", S["h1"]), para(
         "Proposition 3 predicts that halting time scales as 1/&#916; in the decision margin, "
@@ -701,6 +746,10 @@ def build(out_path: str):
         ["&#8220;The accuracy is far below published CLEVR numbers.&#8221;",
          "Stated up front (&#167;4). Different features, different budget; the comparison is "
          "internal and every model shares one cache."],
+        ["&#8220;Does this actually beat anything?&#8221;",
+         "No, and we say so in &#167;5.2. Given a matched prior, MAC and a single attention "
+         "step both exceed it. The contribution is the certificate, the on-manifold state and "
+         "the trace, together with an honest account of what they cost."],
         ["&#8220;Your halting does not do what you said.&#8221;",
          "Reported as a negative in &#167;6, with the saturation analysis and a mechanistic "
          "diagnosis, before a reviewer can find it."],

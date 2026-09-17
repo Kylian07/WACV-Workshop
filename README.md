@@ -39,23 +39,53 @@ Then:
 | **no step-size tuning** | `E` is `4β`-smooth relative to the entropy *independently of N*, so `η = 1/(4β)` is prescribed |
 | **backward compatible** | softmax cross-attention is exactly one step (`T=1, β=0, η=1`) |
 
-The claim the code is built to support: **equal or better accuracy at a fraction of the
-reasoning steps, with a decodable trace** — not a new number on a saturated benchmark.
+**The accuracy claim was tested and withdrawn.** See below — this is a paper about what
+certificates, on-manifold state and interpretability *cost*, not about beating baselines.
 
-### Measured so far, including what failed
+### What held, and what did not
 
-On HOPWORLD (24k train, 4 hops × 3 inner steps), one trained TRAIL model traces a whole
-frontier by sweeping the outer threshold δ: 81.2% at 6.32 belief updates → 79.3% at 4.96
-→ 73.3% at 4.32. Drift is 4×10⁻⁴, i.e. zero up to the tolerance of the projection solver,
-as Prop. 2 requires.
+All on HOPWORLD, 24k train / 3k val, identical budgets and shared front end.
 
-**What did not work:** the halting step does *not* track ground-truth hop count.
-Over most of the δ range the rule saturates at exactly 2 hops (std 0.000, so ρ is undefined
-rather than zero); where it has variance, ρ = 0.06–0.08. Prop. 3 is a statement about
-iterating a *fixed* energy and is true there, but `M_h` is a dense learned operator, so one
-application can compose several hops of the task and the two counts need not agree. See
-`paper/TRAIL_paper.md` §5.3 — the diagnosis and the follow-up it implies are written up
-there, not buried.
+**Held — and these do not depend on the withdrawn comparison:**
+
+| claim | evidence |
+|---|---|
+| the inner certificate halves compute for free | 12 → **6.32** belief updates at *identical* accuracy (0.8123, unchanged to 4 d.p.) |
+| zero off-manifold drift | **4×10⁻⁴** vs **10.76** for free-form recursion — four orders of magnitude |
+| anytime supervision pays in the cheap regime | **+19 points** over last-step training at 5 updates; flat frontier, not cliffed |
+| attention is one TRAIL step | Prop. 1, exact in float64 |
+| the two-loop structure | same accuracy as flat, at **1/3** the O(N²) transport builds |
+| the theory | 10 numerical checks, all passing |
+
+**Did not hold:**
+
+*Accuracy.* The headline +19 over baselines was carried entirely by a control-conditioned
+relative-position bias that **no baseline had**. Given the same module, every baseline
+improves and two overtake TRAIL:
+
+| model | no prior | + prior | updates |
+|---|---|---|---|
+| single cross-attention | 0.619 | **0.896** | **1** |
+| MAC | 0.609 | **0.905** | 12 |
+| free-form latent | 0.602 | 0.721 | 12 |
+| TRAIL | 0.812 | 0.812 | 4.32 |
+
+A single relational attention step — the T=1 case of TRAIL itself — beats the full method by
+8.4 points at a twelfth of the compute. **This also means HOPWORLD cannot test iterated
+reasoning**: if one dense transport application reaches 89.6%, there is nothing for iteration
+to do. That is a benchmark-design error on our part.
+
+*Halting tracks difficulty.* The rule saturates (std 0.000 over most of its range); where it
+has variance, ρ = 0.06–0.08. See `paper/TRAIL_paper.md` §5.3.
+
+*Depth extrapolation.* No model gains from running longer, tied or untied. §5.5.
+
+**Measured prices:** the prescribed step size costs **7.7 points** against a learned one
+(which converges to η = 0.961, violating Thm. B's η ≤ 0.25); the simplex constraint costs
+**8.4 points** against one unconstrained relational attention step.
+
+Honest summary: *latent visual reasoning can be made on-manifold, certified, interpretable
+and adaptively cheap — and this is what it costs.*
 
 ## The theory, and how to check it in one minute
 
