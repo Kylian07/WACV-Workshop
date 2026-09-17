@@ -69,8 +69,10 @@ belief-stationarity rule for the outer loop; and Prop. 3, which predicts that ha
 scales as `1/Δ` in the decision margin — i.e. that harder questions get more compute, for
 free.
 (C4) Empirically: an accuracy/compute frontier traced by one trained model, zero measured
-drift, and a decodable trace. We also report a **negative** result: the halting step does
-*not* track ground-truth hop count (§5.3), and we identify why.
+drift, a decodable trace, and the best out-of-distribution accuracy of any model tested at
+matched budget. We also report **two negative results**: the halting step does not track
+ground-truth hop count (§5.3), and iterating longer does not improve depth extrapolation for
+any model, tied or untied (§5.5).
 
 ## 2 Related work
 
@@ -255,8 +257,9 @@ budget and is described as such.
   **On HOPWORLD it does not**, and the negative result is reported in §5.3 below rather
   than buried. Fig. 6.
 * **5.4 Traces** — `p_t` over the atom grid, Fig. 7; soft cardinality vs true object count.
-* **5.5 Generalisation** — depth-extrapolation split (train ≤10 program nodes, test ≥15),
-  evaluated at `H` and at `2H` steps; held-out attribute combination (red ∧ cube).
+* **5.5 Generalisation** — held-out attribute combination (red ∧ cube). The
+  depth-extrapolation claim was **withdrawn**; see §5.5 below for the measurement
+  that killed it.
 * **5.6 Ablations** — β=0, learned η, last-step loss, flat (K=1), fixed T. Table 3.
 
 ### 5.3 (measured) The halting rule does not track ground-truth difficulty
@@ -290,6 +293,48 @@ This is a concrete, testable diagnosis rather than a shrug, and it points at the
 follow-up: constrain `M_h` (low rank, spatial locality, or a penalty on composing) so that
 one application is one relation, and re-measure ρ. Until that is done, the paper claims
 compute adaptivity and interpretability, **not** unsupervised difficulty estimation.
+
+### 5.5 (measured) Iterating longer does not help, and weight-tying does not rescue it
+
+The intended claim was that TRAIL, handed questions needing more hops than anything in
+training, could recover accuracy by running more mirror-descent steps on the same weights.
+A first measurement showed no gain. We hypothesised the cause was the per-hop control
+embedding: a model with H learned sub-question slots has no way to express the (H+1)-th, so
+iterating it longer cannot help, and the experiment would be measuring the embedding table
+rather than the method. We therefore re-trained every model with the hops tied to a single
+shared operator (`share_steps=True`) and measured both conditions under identical budgets.
+
+**The hypothesis was wrong.** Tying changes essentially nothing, and no model gains from
+extra iterations. Train on 1-3 hop HOPWORLD questions, test on 4-6:
+
+| run | iid | OOD @ native | OOD @ 4x | gain from iterating |
+|---|---|---|---|---|
+| TRAIL, tied | 0.775 | 0.658 | 0.569 | **-0.089** |
+| TRAIL, untied | 0.767 | 0.659 | 0.548 | **-0.111** |
+| free-form latent, tied | 0.524 | 0.437 | 0.438 | +0.000 |
+| free-form latent, untied | 0.534 | 0.438 | 0.442 | +0.003 |
+| MAC, tied | 0.610 | 0.494 | 0.420 | -0.074 |
+| MAC, untied | 0.608 | 0.503 | 0.464 | -0.039 |
+
+Matched tied-against-untied, the difference is +0.008 (TRAIL), -0.010 (free-form) and
++0.002 (MAC) -- inside noise for all three. The gain from 4x depth is never positive beyond
+noise for any model in either condition.
+
+**Two cautions on reading this.** First, the *magnitude* is not robust: the same nominal
+TRAIL configuration degrades by 0.012 in the main table and by 0.111 here, differing only in
+training budget (12 epochs / 24k against 10 epochs / 20k). Only the **direction** is
+consistent, and that is all we claim. Second, the `drop` column flatters the weakest model:
+free-form latent recursion loses least (0.086) only because it starts at 0.53 and has less
+to lose. On absolute out-of-distribution accuracy at native depth, TRAIL (0.658) is well
+ahead of MAC (0.503) and free-form (0.438).
+
+**What this means for the method.** Theorem B governs iterations *within* a hop and the
+tests confirm the inner loop converges. Nothing constrains the *outer* sequence of hops, and
+this is direct evidence that it does not converge -- running the same operator more times
+moves the belief away from the answer rather than refining it. That is a sharper open
+problem than the one we set out with, and it is the honest state of the work: TRAIL
+generalises better than every baseline at its native depth, and it cannot buy more
+generalisation with more compute.
 
 ## 6 Limitations
 
