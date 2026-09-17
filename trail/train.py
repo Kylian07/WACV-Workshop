@@ -117,7 +117,12 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     """Returns accuracy at every eps in the sweep -- one model, a whole frontier."""
     model.eval()
     dl = DataLoader(ds, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
-    T = n_steps or cfg.n_steps
+    # Default to the reasoner's OWN depth, not cfg.n_steps.  cfg.n_steps is TRAIL's
+    # hop count; the recurrent baselines are built with n_steps * inner_steps
+    # iterations so that every model gets the same belief-update budget.  Reading
+    # cfg.n_steps here evaluated them at a third of the depth they were trained at
+    # and silently flattered TRAIL.
+    T = n_steps or int(getattr(model.reasoner, "n_steps", cfg.n_steps))
     # The sweep is over the OUTER threshold delta, which decides how many hops to
     # take.  The inner gap threshold eps decides how many mirror-descent
     # iterations each hop costs; it is held at cfg.eps and enters through the
