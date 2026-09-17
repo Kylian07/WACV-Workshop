@@ -53,6 +53,35 @@ def test_budgets_are_matched_in_belief_updates():
     print(f"budgets matched at full depth: {budgets}")
 
 
+
+def test_operating_point_is_always_measured():
+    """A cfg.delta outside eps_sweep must still be measured, not silently faked.
+
+    evaluate() used to fall back to `acc_full` and `float(T) * per_step` when
+    cfg.delta was not one of the swept thresholds.  That produced a row reporting
+    the architectural budget and full-depth accuracy -- plausible-looking numbers
+    that describe nothing the model did.  It went unnoticed through a whole
+    ablation run.
+    """
+    _, va, vocab, n_ans, fd = hopworld_splits(50, 256, 7, 8, seed=0)
+    off_sweep = 0.77
+    cfg = Config(dataset="synthetic", reasoner="trail", grid=7, d_vis=64, d_ctrl=64,
+                 d_hidden=64, n_steps=4, inner_steps=3, batch_size=64, num_workers=0,
+                 use_count=False, amp=False, delta=off_sweep)
+    assert off_sweep not in cfg.eps_sweep, "pick a delta outside the sweep for this test"
+    model = VQAModel(cfg, vocab=vocab, n_answers=n_ans, feat_dim=fd)
+    e = evaluate(model, va, cfg, device="cpu")
+
+    budget = cfg.n_steps * cfg.inner_steps
+    assert any(d["delta"] == off_sweep for d in e["frontier"]), \
+        "the configured operating point must appear in the frontier"
+    assert e["avg_updates"] < budget, \
+        f"avg_updates {e['avg_updates']} equals the architectural budget -- fallback fired"
+    assert e["avg_steps"] <= cfg.n_steps
+    print(f"off-sweep delta={off_sweep} measured: {e['avg_steps']:.2f} hops, "
+          f"{e['avg_updates']:.2f} updates (budget {budget}): OK")
+
+
 ALL = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 if __name__ == "__main__":

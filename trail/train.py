@@ -127,13 +127,17 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     # take.  The inner gap threshold eps decides how many mirror-descent
     # iterations each hop costs; it is held at cfg.eps and enters through the
     # update accounting, not through the answer.
-    eps_list = list(cfg.eps_sweep)
+    # Always evaluate the configured operating point, even when it is not one of the
+    # swept values.  Previously a cfg.delta outside eps_sweep fell through to
+    # `acc_full` and `float(T) * per_step`, which produces a plausible-looking row
+    # that reports the architectural budget instead of what the model actually did.
+    eps_list = sorted(set(list(cfg.eps_sweep) + [float(cfg.delta)]), reverse=True)
     correct = {e: 0 for e in eps_list}
     steps = {e: 0.0 for e in eps_list}
     updates = {e: 0.0 for e in eps_list}
     n, acc_full = 0, 0
     per_hop = {}
-    halt_by_delta = {e: [] for e in cfg.eps_sweep}
+    halt_by_delta: dict = {}
     gap_curve = torch.zeros(T)
     inner_curve = None
     halt_vs_hops = []
@@ -192,7 +196,7 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
             else:
                 updates[e] += (t_idx + 1).float().sum().item() * per_step
             if "hops" in batch and moves is not None:
-                halt_by_delta[e].append(
+                halt_by_delta.setdefault(e, []).append(
                     torch.stack([t_idx.float(), batch["hops"].float()], -1).cpu())
 
         if moves is not None and "hops" in batch:
@@ -220,11 +224,10 @@ def evaluate(model, ds, cfg, device="cuda", n_steps=None, collect_traces=0):
     out: dict = {
         "n": n,
         "acc_full": acc_full / n,
-        "acc_eps": correct[cfg.delta] / n if cfg.delta in correct else acc_full / n,
-        "avg_steps": steps[cfg.delta] / n if cfg.delta in steps else float(T),
+        "acc_eps": correct[float(cfg.delta)] / n,
+        "avg_steps": steps[float(cfg.delta)] / n,
         "updates_per_step": per_step,
-        "avg_updates": (updates[cfg.delta] / n if cfg.delta in updates
-                        else float(T) * per_step),
+        "avg_updates": updates[float(cfg.delta)] / n,
         "frontier": [{"delta": e, "acc": correct[e] / n, "steps": steps[e] / n,
                       "updates": updates[e] / n} for e in eps_list],
         "gap_curve": (gap_curve / max(1, len(dl))).tolist(),
