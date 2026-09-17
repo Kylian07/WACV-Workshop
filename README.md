@@ -79,6 +79,9 @@ python scripts/run_clevr.py --split iid --smoke              # CLEVR pipeline ch
 python scripts/run_clevr.py --split iid --epochs 8           # the real run
 python scripts/run_clevr.py --split depth                    # depth extrapolation
 python scripts/run_clevr.py --split hoc                      # held-out red∧cube
+python scripts/run_gqa.py --smoke                            # real images, same pipeline
+python scripts/eval_extrapolation.py --runs runs/synthetic   # depth extrapolation
+python scripts/report.py --runs runs/synthetic               # tables, Markdown + LaTeX
 ```
 
 ## Datasets
